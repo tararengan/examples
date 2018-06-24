@@ -10,8 +10,6 @@ from matplotlib import pyplot as plt
 import sys
 
 
-#constants
-
 
 def generate_points(size = 50):
 
@@ -129,7 +127,6 @@ for i in range(num_batches):
 
 
 
-
 predictions = []
 for epoch in range(40):
 
@@ -145,7 +142,6 @@ for epoch in range(40):
 
         # forward + backward + optimize
         outputs = net(inputs)
-        #print(type(outputs), outputs.size(), outputs.dtype)
         loss = loss_fn(outputs, labels)
         loss.backward()
         optimizer.step()
