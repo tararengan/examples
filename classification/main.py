@@ -29,11 +29,11 @@ def generate_points_on_circle(size=50):
     N = math.floor(size/4)
     size = 4*N
 
-    radius_multiplier = np.random.choice([1,2,3,4], size=(size,))
+    radius_multiplier = np.random.choice([1, 2, 3, 4], size=(size,))
     c1_points = np.multiply(radius_multiplier, np.random.random_sample(size))
     c2_points = np.sqrt(np.square(radius_multiplier) - np.square(c1_points))
 
-    points = np.hstack((c1_points, c2_points)).reshape(size, 2)
+    points = np.stack((c1_points, c2_points), axis=-1)
 
     return points, radius_multiplier
 
@@ -101,8 +101,8 @@ def generate_labels_by_rad(points, radius_mult):
     x_ = points
     y_ = labels
 
-    x_ = torch.from_numpy(x_).float()
-    y_ = torch.from_numpy(y_).long()
+    x_ = torch.from_numpy(x_)
+    y_ = torch.from_numpy(y_).float()
 
     return x_, y_
 
@@ -149,8 +149,8 @@ class CircularNet(nn.Module):
 
     def __init__(self):
         super(CircularNet, self).__init__()
-        self.lin1 = nn.Linear(3, 4)
-        self.activation = nn.HardTanh(-1,1)
+        self.lin = nn.Linear(3, 4)
+        self.activation = nn.Sigmoid()
         self.logprob = nn.LogSoftmax()
 
     def forward(self, x):
@@ -158,35 +158,6 @@ class CircularNet(nn.Module):
         x = self.activation(x).squeeze()
         #x = self.logprob(x)
         return x
-
-
-# net = LinearNet()
-
-#get data in batches
-x_data = []
-y_data = []
-num_batches = 15
-batch_size = 20
-for i in range(num_batches):
-    x, y = get_batch(batch_size)
-    x_data.append(x)
-    y_data.append(y)
-
-
-net = CircularNet()
-
-theta_data = []
-circ_data = []
-for i in range(len(x_data)):
-    rho_data = np.sqrt(np.sum(list(map(lambda arg_x: arg_x**2, x_data[i].numpy()))), axis=1)
-    rho_sq_data = np.square(rho_data)
-    vec_data = np.hstack(rho_sq_data, rho_data, np.ones(len(rho_data),))
-    circ_data.append(torch.from_numpy(vec_data))
-
-
-
-loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=.002, momentum=.8)
 
 
 def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
@@ -224,14 +195,13 @@ def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
 
 def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
 
-    predictions = []
     for epoch in range(40):
 
         running_loss = 0.0
 
         for i in range(num_batches):
 
-            inputs = x_data[i]
+            inputs = circ_data[i]
             labels = y_data[i]
 
             # zero the parameter gradients
@@ -255,8 +225,7 @@ def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
     return net
 
 
-
-def get_accuracy_train(x_data, y_data, net, toplot=False):
+def get_accuracy_train(input_data, x_data, y_data, net, toplot=False):
     if toplot:
         plt.title('A 2D Classifier')
         plt.ion()
@@ -266,7 +235,7 @@ def get_accuracy_train(x_data, y_data, net, toplot=False):
     accuracy = 0
     for i in range(num_batches):
 
-        inputs = x_data[i]
+        inputs = input_data[i]
         labels = y_data[i]
 
         outputs = net(inputs)
@@ -308,12 +277,42 @@ def get_accuracy_train(x_data, y_data, net, toplot=False):
 
 
 
+# net = LinearNet()
+
+
+#get data in batches
+x_data = []
+y_data = []
+num_batches = 20
+batch_size = 50
+for i in range(num_batches):
+    x, y = get_batch(batch_size)
+    x_data.append(x)
+    y_data.append(y)
+
+
+net = CircularNet()
+
+theta_data = []
+circ_data = []
+for i in range(len(x_data)):
+    rho_data = np.sqrt(np.sum(list(map(lambda arg_x: arg_x**2, x_data[i].numpy())), axis=1))
+    rho_sq_data = np.square(rho_data)
+    vec_data = np.stack((rho_sq_data, rho_data, np.ones(len(rho_data),)), axis=-1)
+    circ_data.append(torch.from_numpy(vec_data))
+    circ_data[i] = circ_data[i].float()
+    y_data[i] = y_data[i].long()
+
+loss_fn = nn.CrossEntropyLoss()
+optimizer = optim.SGD(net.parameters(), lr=.005, momentum=.8)
+
+net = train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer)
+accuracy = get_accuracy_train(circ_data, x_data, y_data, net, True)
 
 print('Accuracy: {0}'.format(accuracy))
 
 
-print(net.lin1._parameters)
-print(net.lin2._parameters)
+
 
 
 
