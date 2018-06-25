@@ -149,23 +149,18 @@ class CircularNet(nn.Module):
 
     def __init__(self):
         super(CircularNet, self).__init__()
-        self.lin1 = nn.Linear(2, 2)
-        self.lin2 = nn.Linear(2, 4)
-        self.activation = nn.ReLU()
+        self.lin1 = nn.Linear(3, 4)
+        self.activation = nn.HardTanh(-1,1)
         self.logprob = nn.LogSoftmax()
 
     def forward(self, x):
-        x = self.lin1(x)
-        x = self.lin2(x)
+        x = self.lin(x)
         x = self.activation(x).squeeze()
         #x = self.logprob(x)
         return x
 
 
-net = LinearNet()
-
-loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=.002, momentum=.8)
+# net = LinearNet()
 
 #get data in batches
 x_data = []
@@ -178,10 +173,20 @@ for i in range(num_batches):
     y_data.append(y)
 
 
-rho_data = []
+net = CircularNet()
+
 theta_data = []
+circ_data = []
 for i in range(len(x_data)):
-    rho_data.append(math.sqrt(sum(list(map(lambda arg_x: arg_x**2, x_data[i])))))
+    rho_data = np.sqrt(np.sum(list(map(lambda arg_x: arg_x**2, x_data[i].numpy()))), axis=1)
+    rho_sq_data = np.square(rho_data)
+    vec_data = np.hstack(rho_sq_data, rho_data, np.ones(len(rho_data),))
+    circ_data.append(torch.from_numpy(vec_data))
+
+
+
+loss_fn = nn.CrossEntropyLoss()
+optimizer = optim.SGD(net.parameters(), lr=.002, momentum=.8)
 
 
 def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
@@ -217,8 +222,38 @@ def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
     return net
 
 
-def train_circular(num_batches, x_data, y_data, net, loss_fn, optimizer):
-    
+def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
+
+    predictions = []
+    for epoch in range(40):
+
+        running_loss = 0.0
+
+        for i in range(num_batches):
+
+            inputs = x_data[i]
+            labels = y_data[i]
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward + backward + optimize
+            outputs = net(inputs)
+            loss = loss_fn(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            # print statistics
+            running_loss += loss.item()
+            if i % 5 == 4:  # print every r mini-batches
+                print('[%d, %5d] loss: %.3f' %
+                      (epoch + 1, i + 1, running_loss / 5))
+                running_loss = 0.0
+
+    print('Finished training \n')
+
+    return net
+
 
 
 def get_accuracy_train(x_data, y_data, net, toplot=False):
