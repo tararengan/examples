@@ -30,7 +30,7 @@ def generate_points_on_circle(size=50):
     N = math.floor(size/4)
     size = 4*N
 
-    radius_multiplier = np.random.choice([1.0, 2.0, 3.0, 4.0], size=(size,))
+    radius_multiplier = np.random.choice(list(np.array(range(5))+1), size=(size,))
     c1_points = np.multiply(radius_multiplier, np.random.random_sample(size))
     c2_points = np.sqrt(np.square(radius_multiplier) - np.square(c1_points))
 
@@ -95,6 +95,7 @@ def generate_labels_by_rot_quad(points):
 
 def generate_labels_by_rad(points, radius_mult):
     radius_values = np.unique(radius_mult)
+    print(radius_values)
     radius_label_dict = dict([(val, i) for i, val in enumerate(radius_values)])
 
     labels = np.array(list(map(lambda arg_x: radius_label_dict[arg_x], radius_mult)))
@@ -150,13 +151,13 @@ class CircularNet(nn.Module):
 
     def __init__(self):
         super(CircularNet, self).__init__()
-        self.lin = nn.Linear(3, 4)
-        self.activation = nn.Sigmoid()
+        self.lin = nn.Linear(3, 4, bias = False)
+        self.activation = nn.Hardtanh(-1.5, 1.5)
         self.logprob = nn.LogSoftmax()
 
     def forward(self, x):
         x = self.lin(x)
-        x = self.activation(x).squeeze()
+        # x = self.activation(x).squeeze()
         #x = self.logprob(x)
         return x
 
@@ -196,7 +197,7 @@ def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
 
 def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
 
-    for epoch in range(2):
+    for epoch in range(50):
 
         running_loss = 0.0
 
@@ -204,6 +205,8 @@ def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
 
             inputs = circ_data[i]
             labels = y_data[i]
+
+            print(labels)
 
             # zero the parameter gradients
             optimizer.zero_grad()
@@ -234,6 +237,7 @@ def get_accuracy_train(input_data, x_data, y_data, net, toplot=False):
 
     #get predictions and accuracy
     accuracy = 0
+    coord_values_by_class = []
     for i in range(num_batches):
 
         inputs = input_data[i]
@@ -242,37 +246,33 @@ def get_accuracy_train(input_data, x_data, y_data, net, toplot=False):
         outputs = net(inputs)
         max_values, predictions = torch.max(outputs, 1)
 
+        num_classes = np.unique(labels.numpy)
+
         accuracy += len(np.where(labels.numpy() == predictions.numpy())[0])
 
-        class_1_indices = list(np.where(predictions.numpy() == 0)[0])
-        class_2_indices = list(np.where(predictions.numpy() == 1)[0])
-        class_3_indices = list(np.where(predictions.numpy() == 2)[0])
-        class_4_indices = list(np.where(predictions.numpy() == 3)[0])
+        indices_by_class = []
+        for j in range(num_classes):
+            indices_by_class.append(list(np.where(predictions.numpy() == j)[0]))
 
-        coord_cl1 = x_data[i].numpy()[class_1_indices, :]
-        coord_cl2 = x_data[i].numpy()[class_2_indices, :]
-        coord_cl3 = x_data[i].numpy()[class_3_indices, :]
-        coord_cl4 = x_data[i].numpy()[class_4_indices, :]
+        coords_by_class = []
+        for j in range(num_classes):
+            coords_by_class.append(x_data[i].numpy()[indices_by_class[j], :])
 
         if i == 0:
-            coord_values_cl1 = coord_cl1
-            coord_values_cl2 = coord_cl2
-            coord_values_cl3 = coord_cl3
-            coord_values_cl4 = coord_cl4
+            for j in range(num_classes):
+                coord_values_by_class.append(coords_by_class[j])
         else:
-            coord_values_cl1 = np.concatenate((coord_values_cl1, coord_cl1), axis=0)
-            coord_values_cl2 = np.concatenate((coord_values_cl2, coord_cl2), axis=0)
-            coord_values_cl3 = np.concatenate((coord_values_cl3, coord_cl3), axis=0)
-            coord_values_cl4 = np.concatenate((coord_values_cl4, coord_cl4), axis=0)
-
+            for j in range(num_classes):
+                coord_values_by_class[j] = np.concatenate(
+                    (coord_values_by_class[j], coords_by_class[j]), axis=0)
 
     accuracy = accuracy/(batch_size*num_batches)
 
+    marker_size = 5
     if toplot:
-        plt.scatter(coord_values_cl1[:, 0], coord_values_cl1[:, 1], color='r', s=10)
-        plt.scatter(coord_values_cl2[:, 0], coord_values_cl2[:, 1], color='b', s=10)
-        plt.scatter(coord_values_cl3[:, 0], coord_values_cl3[:, 1], color='c', s=10)
-        plt.scatter(coord_values_cl4[:, 0], coord_values_cl4[:, 1], color='y', s=10)
+        for j in range(num_classes):
+            plt.scatter(coord_values_by_class[j][:, 0], coord_values_by_class[j][:, 1], s = marker_size)
+            marker_size +=5
 
     return accuracy
 
@@ -285,7 +285,7 @@ def get_accuracy_train(input_data, x_data, y_data, net, toplot=False):
 x_data = []
 y_data = []
 num_batches = 10
-batch_size = 20
+batch_size = 40
 for i in range(num_batches):
     x, y = get_batch(batch_size)
     x_data.append(x)
@@ -305,7 +305,7 @@ for i in range(len(x_data)):
     y_data[i] = y_data[i].long()
 
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=.001, momentum=.8)
+optimizer = optim.SGD(net.parameters(), lr=.003, momentum=.8)
 
 # start_weight = torch.from_numpy(np.array([[-1, 2, -1], [-1, 4, -4], [-1, 6, -9], [-1, 8, -16]], dtype=float))
 # net.lin.weight.data = start_weight.float()
