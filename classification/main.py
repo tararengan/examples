@@ -24,12 +24,13 @@ def generate_rect_points(size = 50):
 
     return points
 
+
 def generate_points_on_circle(size=50):
 
     N = math.floor(size/4)
     size = 4*N
 
-    radius_multiplier = np.random.choice([1, 2, 3, 4], size=(size,))
+    radius_multiplier = np.random.choice([1.0, 2.0, 3.0, 4.0], size=(size,))
     c1_points = np.multiply(radius_multiplier, np.random.random_sample(size))
     c2_points = np.sqrt(np.square(radius_multiplier) - np.square(c1_points))
 
@@ -101,8 +102,8 @@ def generate_labels_by_rad(points, radius_mult):
     x_ = points
     y_ = labels
 
-    x_ = torch.from_numpy(x_)
-    y_ = torch.from_numpy(y_).float()
+    x_ = torch.from_numpy(x_).float()
+    y_ = torch.from_numpy(y_).long()
 
     return x_, y_
 
@@ -195,7 +196,7 @@ def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
 
 def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
 
-    for epoch in range(40):
+    for epoch in range(2):
 
         running_loss = 0.0
 
@@ -283,8 +284,8 @@ def get_accuracy_train(input_data, x_data, y_data, net, toplot=False):
 #get data in batches
 x_data = []
 y_data = []
-num_batches = 20
-batch_size = 50
+num_batches = 10
+batch_size = 20
 for i in range(num_batches):
     x, y = get_batch(batch_size)
     x_data.append(x)
@@ -304,14 +305,17 @@ for i in range(len(x_data)):
     y_data[i] = y_data[i].long()
 
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=.005, momentum=.8)
+optimizer = optim.SGD(net.parameters(), lr=.001, momentum=.8)
+
+# start_weight = torch.from_numpy(np.array([[-1, 2, -1], [-1, 4, -4], [-1, 6, -9], [-1, 8, -16]], dtype=float))
+# net.lin.weight.data = start_weight.float()
 
 net = train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer)
 accuracy = get_accuracy_train(circ_data, x_data, y_data, net, True)
 
 print('Accuracy: {0}'.format(accuracy))
 
-
+print(net.lin.weight.data)
 
 
 
