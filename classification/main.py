@@ -107,7 +107,7 @@ def generate_labels_by_rad(points, radius_mult):
 
 def generate_rect_data(batch_size =50):
     points = generate_rect_points(batch_size)
-    x, y = generate_labels_by_rot_quad(points)
+    x, y = generate_labels_by_quad(points)
 
     return x, y
 
@@ -120,8 +120,8 @@ def generate_circ_data(batch_size =50, num_classes =4):
 
 
 def get_batch(batch_size=50, num_classes =4):
-    #x, y = generate_rect_data(batch_size)
-    x, y = generate_circ_data(batch_size, num_classes)
+    x, y = generate_rect_data(batch_size)
+    #x, y = generate_circ_data(batch_size, num_classes)
     return x, y
 
 
@@ -136,7 +136,7 @@ class LinearNet(nn.Module):
         self.logprob = nn.LogSoftmax()
 
     def forward(self, x):
-        x = self.lin1(x)
+        #x = self.lin1(x)
         x = self.lin2(x)
         x = self.activation(x).squeeze()
         #x = self.logprob(x)
@@ -161,14 +161,14 @@ class CircularNet(nn.Module):
 def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
 
     predictions = []
-    for epoch in range(40):
+    for epoch in range(10):
 
         running_loss = 0.0
 
-        for i in range(num_batches):
+        for idx in range(num_batches):
 
-            inputs = x_data[i]
-            labels = y_data[i]
+            inputs = x_data[idx]
+            labels = y_data[idx]
 
             # zero the parameter gradients
             optimizer.zero_grad()
@@ -181,9 +181,9 @@ def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
 
             # print statistics
             running_loss += loss.item()
-            if i % 5 == 4:  # print every r mini-batches
+            if idx % 5 == 4:  # print every r mini-batches
                 print('[%d, %5d] loss: %.3f' %
-                      (epoch + 1, i + 1, running_loss / 5))
+                      (epoch + 1, idx + 1, running_loss / 5))
                 running_loss = 0.0
 
     print('Finished training \n')
@@ -223,7 +223,7 @@ def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
     return net
 
 
-def get_accuracy_train(num_batches, num_classes, input_data, x_data, y_data, net, toplot=False):
+def get_accuracy(num_batches, num_classes, input_data, x_data, y_data, net, subplot_index, toplot=False):
     if toplot:
         plt.title('A 2D Classifier')
         plt.ion()
@@ -264,7 +264,7 @@ def get_accuracy_train(num_batches, num_classes, input_data, x_data, y_data, net
     accuracy = accuracy/(batch_size*num_batches)
 
 
-
+    plt.subplot(2,1,subplot_index)
     marker_size = 5
     if toplot:
         for j in range(num_classes):
@@ -281,40 +281,57 @@ def get_accuracy_train(num_batches, num_classes, input_data, x_data, y_data, net
 #get data in batches
 x_data = []
 y_data = []
-num_batches = 10
-batch_size = 30
-num_classes = 5
+num_batches = 100
+batch_size = 50
+num_classes = 4
 for i in range(num_batches):
     x, y = get_batch(batch_size, num_classes)
     x_data.append(x)
     y_data.append(y)
 
 
-net = CircularNet(num_classes)
 
-theta_data = []
-circ_data = []
-for i in range(len(x_data)):
-    rho_data = np.sqrt(np.sum(list(map(lambda arg_x: arg_x**2, x_data[i].numpy())), axis=1))
-    rho_sq_data = np.square(rho_data)
-    vec_data = np.stack((rho_sq_data, rho_data, np.ones(len(rho_data),)), axis=-1)
-    circ_data.append(torch.from_numpy(vec_data))
-    circ_data[i] = circ_data[i].float()
-    y_data[i] = y_data[i].long()
+#
+# theta_data = []
+# circ_data = []
+# for i in range(len(x_data)):
+#     rho_data = np.sqrt(np.sum(list(map(lambda arg_x: arg_x**2, x_data[i].numpy())), axis=1))
+#     rho_sq_data = np.square(rho_data)
+#     vec_data = np.stack((rho_sq_data, rho_data, np.ones(len(rho_data),)), axis=-1)
+#     circ_data.append(torch.from_numpy(vec_data))
+#     circ_data[i] = circ_data[i].float()
+#     y_data[i] = y_data[i].long()
+
+
+train_frac = .65
+train_num_batches = math.floor(num_batches*train_frac)
+test_num_batches = num_batches - train_num_batches
+
+train_batch_indices = slice(0, train_num_batches)
+test_batch_indices = slice(train_num_batches, num_batches)
+
+net = LinearNet()
+# net = CircularNet(num_classes)
 
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=.003, momentum=.8)
+optimizer = optim.SGD(net.parameters(), lr=.002, momentum=.8)
 
 # start_weight = torch.from_numpy(np.array([[-1, 2, -1], [-1, 4, -4], [-1, 6, -9], [-1, 8, -16], [-1, 10, -25]], dtype=float))
 # net.lin.weight.data = start_weight.float()
 
+net = train_linear(train_num_batches, x_data[train_batch_indices], y_data[train_batch_indices], net, loss_fn, optimizer)
+# net = train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer)
 
-net = train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer)
-accuracy = get_accuracy_train(num_batches, num_classes, circ_data, x_data, y_data, net, True)
+accuracy_train = get_accuracy(train_num_batches, num_classes,
+                                    x_data[train_batch_indices], x_data[train_batch_indices], y_data[train_batch_indices],
+                                    net, 1, True)
+accuracy_test = get_accuracy(test_num_batches, num_classes,
+                                    x_data[test_batch_indices], x_data[test_batch_indices], y_data[test_batch_indices],
+                                    net, 2, True)
 
-print('Accuracy: {0}'.format(accuracy))
+print('Accuracy train: {0} \n Accuracy test: {1}'.format(accuracy_train, accuracy_test))
 
-print(net.lin.weight.data)
+print(net.lin2.weight.data)
 
 
 
