@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from matplotlib import pyplot as plt
 import math
+from torch.optim.lr_scheduler import StepLR
 import sys
 
 
@@ -16,9 +17,9 @@ def generate_rect_points(size = 50):
 
     N = size
     c1_points = np.multiply(np.random.choice([1, -1], size=(N, 1)),
-                         np.random.randint(4, 10, (N, 1), 'int32')  + np.random.randn(N, 1))
+                         np.random.randint(6, 10, (N, 1), 'int32')  + np.random.randn(N, 1))
     c2_points = np.multiply(np.random.choice([1, -1], size=(N, 1)),
-                            np.random.randint(3, 10, (N, 1), 'int32') + np.random.randn(N, 1))
+                            np.random.randint(6, 10, (N, 1), 'int32') + np.random.randn(N, 1))
 
     points = np.concatenate((c1_points, c2_points), axis=1).reshape(N, 2)
 
@@ -161,7 +162,7 @@ class CircularNet(nn.Module):
 def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
 
     predictions = []
-    for epoch in range(10):
+    for epoch in range(200):
 
         running_loss = 0.0
 
@@ -177,7 +178,8 @@ def train_linear(num_batches, x_data, y_data, net, loss_fn, optimizer):
             outputs = net(inputs)
             loss = loss_fn(outputs, labels)
             loss.backward()
-            optimizer.step()
+            scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
+            scheduler.step()
 
             # print statistics
             running_loss += loss.item()
@@ -223,11 +225,14 @@ def train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer):
     return net
 
 
-def get_accuracy(num_batches, num_classes, input_data, x_data, y_data, net, subplot_index, toplot=False):
+def get_accuracy(batch_size, num_batches, num_classes, input_data, x_data, y_data, net, subplot_index, toplot=False):
     if toplot:
         plt.title('A 2D Classifier')
         plt.ion()
         plt.show()
+
+    if num_batches <= 0:
+        return 0
 
     #get predictions and accuracy
     accuracy = 0
@@ -261,7 +266,8 @@ def get_accuracy(num_batches, num_classes, input_data, x_data, y_data, net, subp
                 coord_values_by_class[j] = np.concatenate(
                     (coord_values_by_class[j], coords_by_class[j]), axis=0)
 
-    accuracy = accuracy/(batch_size*num_batches)
+    print(float(batch_size), float(num_batches))
+    accuracy = accuracy/(float(batch_size)*float(num_batches))
 
 
     plt.subplot(2,1,subplot_index)
@@ -281,8 +287,8 @@ def get_accuracy(num_batches, num_classes, input_data, x_data, y_data, net, subp
 #get data in batches
 x_data = []
 y_data = []
-num_batches = 100
-batch_size = 50
+num_batches = 10
+batch_size = 100
 num_classes = 4
 for i in range(num_batches):
     x, y = get_batch(batch_size, num_classes)
@@ -303,7 +309,7 @@ for i in range(num_batches):
 #     y_data[i] = y_data[i].long()
 
 
-train_frac = .65
+train_frac = 1
 train_num_batches = math.floor(num_batches*train_frac)
 test_num_batches = num_batches - train_num_batches
 
@@ -314,7 +320,7 @@ net = LinearNet()
 # net = CircularNet(num_classes)
 
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=.002, momentum=.8)
+optimizer = optim.SGD(net.parameters(), lr=.01, momentum=.8)
 
 # start_weight = torch.from_numpy(np.array([[-1, 2, -1], [-1, 4, -4], [-1, 6, -9], [-1, 8, -16], [-1, 10, -25]], dtype=float))
 # net.lin.weight.data = start_weight.float()
@@ -322,10 +328,10 @@ optimizer = optim.SGD(net.parameters(), lr=.002, momentum=.8)
 net = train_linear(train_num_batches, x_data[train_batch_indices], y_data[train_batch_indices], net, loss_fn, optimizer)
 # net = train_circular(num_batches, circ_data, y_data, net, loss_fn, optimizer)
 
-accuracy_train = get_accuracy(train_num_batches, num_classes,
+accuracy_train = get_accuracy(batch_size, train_num_batches, num_classes,
                                     x_data[train_batch_indices], x_data[train_batch_indices], y_data[train_batch_indices],
                                     net, 1, True)
-accuracy_test = get_accuracy(test_num_batches, num_classes,
+accuracy_test = get_accuracy(batch_size, test_num_batches, num_classes,
                                     x_data[test_batch_indices], x_data[test_batch_indices], y_data[test_batch_indices],
                                     net, 2, True)
 
